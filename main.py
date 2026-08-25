@@ -17,10 +17,12 @@ except Exception:
 APP_NAME = "FindMyCLI"
 
 def _keyring_usable():
-    """Headless Linux has no Credential Manager/GNOME Keyring/KWallet running,
-    so keyring silently has nowhere to store secrets. Detect that up front and
-    fall back to a permission-locked local file instead of failing every save."""
-    if not keyring:
+    """Only trust an OS keyring on Windows (Credential Manager). On Linux, a
+    D-Bus-backed keyring (SecretService/GNOME Keyring) can appear to work over
+    one SSH session and silently lose the entry on the next login since headless
+    boxes have no persistent unlocked keyring daemon - unreliable for a script
+    meant to run unattended. Use the permission-locked local file there instead."""
+    if os.name != "nt" or not keyring:
         return False
     try:
         backend = keyring.get_keyring()
