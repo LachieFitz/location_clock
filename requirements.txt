@@ -1,0 +1,6 @@
+# Pinned to versions validated against this project. In particular, pyicloud's
+# internal FindMyiPhoneServiceManager structure has changed across releases in
+# backward-incompatible ways (see: KeyError in __getitem__ on some newer
+# versions) - don't bump without retesting --show-ids end to end.
+pyicloud==2.0.1
+keyring==25.6.0
