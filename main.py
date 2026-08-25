@@ -9,10 +9,26 @@ except Exception:
     raise SystemExit("pyicloud not installed. Run: pip install -U pyicloud")
 try:
     import keyring
+    from keyring.errors import KeyringError
 except Exception:
     keyring = None
+    KeyringError = Exception
 
 APP_NAME = "FindMyCLI"
+
+def _keyring_usable():
+    """Headless Linux has no Credential Manager/GNOME Keyring/KWallet running,
+    so keyring silently has nowhere to store secrets. Detect that up front and
+    fall back to a permission-locked local file instead of failing every save."""
+    if not keyring:
+        return False
+    try:
+        backend = keyring.get_keyring()
+        return backend.__class__.__module__ != "keyring.backends.fail"
+    except Exception:
+        return False
+
+KEYRING_OK = _keyring_usable()
 
 # ----- state/paths -----
 if os.name == "nt":
@@ -23,6 +39,7 @@ STATE_DIR.mkdir(parents=True, exist_ok=True)
 COOKIE_DIR = STATE_DIR / "pyicloud_cookies"
 COOKIE_DIR.mkdir(parents=True, exist_ok=True)
 APPLE_ID_FILE = STATE_DIR / "apple_id.txt"
+CRED_FALLBACK_FILE = STATE_DIR / "credential.local"  # used only when no OS keyring backend is available
 ELSEWHERE_LABEL = "elsewhere"
 
 # Geofences (device IDs, home/work/school coords) live in geofences.json next
@@ -45,17 +62,39 @@ def _save_apple_id(username: str):
         pass
 
 def _get_saved_password(username: str):
-    if not keyring: return None
-    try: return keyring.get_password(APP_NAME, username)
-    except Exception: return None
+    if not username:
+        return None
+    if KEYRING_OK:
+        try:
+            return keyring.get_password(APP_NAME, username)
+        except KeyringError:
+            pass
+    try:
+        if CRED_FALLBACK_FILE.exists():
+            saved_user, _, saved_pw = CRED_FALLBACK_FILE.read_text(encoding="utf-8").partition("\n")
+            if saved_user == username:
+                return saved_pw
+    except Exception:
+        pass
+    return None
 
 def _save_password(username: str, password: str):
-    if not keyring: return
+    if KEYRING_OK:
+        try:
+            keyring.set_password(APP_NAME, username, password)
+            print("[i] Saved password to system keyring.")
+            return
+        except KeyringError:
+            print("[!] System keyring unavailable, falling back to a local file.")
     try:
-        keyring.set_password(APP_NAME, username, password)
-        print("[i] Saved password to Windows Credential Manager.")
+        CRED_FALLBACK_FILE.write_text(f"{username}\n{password}", encoding="utf-8")
+        try:
+            os.chmod(CRED_FALLBACK_FILE, 0o600)
+        except Exception:
+            pass
+        print(f"[i] Saved password to {CRED_FALLBACK_FILE} (restricted to your user; no OS keyring backend found).")
     except Exception:
-        print("[!] Could not save password to Credential Manager (continuing).")
+        print("[!] Could not save password locally either (continuing).")
 
 def _clear_cookies():
     if COOKIE_DIR.exists():
@@ -68,12 +107,18 @@ def _clear_cookies():
 
 def _forget_everything():
     user = _read_saved_apple_id()
-    if user and keyring:
+    if user and KEYRING_OK:
         try:
             keyring.delete_password(APP_NAME, user)
             print(f"[i] Removed saved password for {user}.")
-        except Exception:
+        except KeyringError:
             pass
+    try:
+        if CRED_FALLBACK_FILE.exists():
+            CRED_FALLBACK_FILE.unlink()
+            print("[i] Removed locally-saved password.")
+    except Exception:
+        pass
     try:
         if APPLE_ID_FILE.exists():
             APPLE_ID_FILE.unlink()
