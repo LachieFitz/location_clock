@@ -15,7 +15,10 @@ except Exception:
 APP_NAME = "FindMyCLI"
 
 # ----- state/paths -----
-STATE_DIR = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / "FindMy"
+if os.name == "nt":
+    STATE_DIR = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / "FindMy"
+else:
+    STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "FindMy"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 COOKIE_DIR = STATE_DIR / "pyicloud_cookies"
 COOKIE_DIR.mkdir(parents=True, exist_ok=True)
@@ -229,9 +232,11 @@ def fetch_location_hard(api, dev, attempts=12, sleep_s=1.5, nudge=False):
     return (None, None)
 
 def show_location(loc):
+    lat = loc.get("latitude"); lon = loc.get("longitude")
     ts = loc.get("timeStamp") or loc.get("timestamp")
     when = datetime.fromtimestamp(ts/1000, tz=timezone.utc).astimezone() if ts else None
     acc = loc.get("horizontalAccuracy")
+    print(f"  Latitude,Long.: {lat}, {lon}")
     if when: print(f"  When          : {when.isoformat(timespec='seconds')}")
     if acc is not None: print(f"  Accuracy (m)  : {acc}")
 
