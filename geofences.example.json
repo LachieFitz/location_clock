@@ -1,0 +1,13 @@
+{
+  "by_device": {
+    "REPLACE_WITH_DEVICE_ID_FROM_--show-ids": {
+      "labels": {
+        "home": {"lat": 0.0, "lon": 0.0, "radius_m": 200},
+        "work": {"lat": 0.0, "lon": 0.0, "radius_m": 200}
+      }
+    }
+  },
+  "default": {
+    "labels": {}
+  }
+}
