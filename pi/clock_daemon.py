@@ -14,26 +14,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import main as fm  # noqa: E402  (../main.py -- login, fetch, classify, geofences)
-
-try:
-    import pigpio
-except ImportError:
-    pigpio = None
+import servo  # noqa: E402  (pin mapping + pigpio helpers, shared with servo_test.py)
 
 # -------------------- config (tune once the clock face is in front of you) --------------------
-SERVO_PINS = {"dad": 12, "lachlan": 13, "mum": 18, "stella": 19}  # BCM pin numbers
+SERVO_PINS = servo.SERVO_PINS
 STATE_ANGLES = {"home": 0, "secondary": 60, "elsewhere": 120, "unknown": 180}  # degrees, evenly spaced placeholder
-PULSE_MIN_US = 500   # pulsewidth at 0 degrees
-PULSE_MAX_US = 2500  # pulsewidth at 180 degrees
 POLL_INTERVAL_S = 60
 FETCH_ATTEMPTS = 6   # trimmed from main.py's default of 12 so 4 devices comfortably fit in POLL_INTERVAL_S
 FETCH_SLEEP_S = 1.0
 # ================================================================================================
-
-
-def angle_to_pulsewidth(angle_deg):
-    angle_deg = max(0, min(180, angle_deg))
-    return int(PULSE_MIN_US + (angle_deg / 180) * (PULSE_MAX_US - PULSE_MIN_US))
 
 
 def bucket_for(label):
@@ -78,20 +67,14 @@ def poll_once(api, labels_cfg, name_to_id, pi, dry_run):
         print(f"[i] {name:8s} label={label!r:12s} -> {bucket:9s} -> {angle}deg (pin {pin})")
 
         if not dry_run:
-            pi.set_servo_pulsewidth(pin, angle_to_pulsewidth(angle))
+            pi.set_servo_pulsewidth(pin, servo.angle_to_pulsewidth(angle))
 
 
 def run(dry_run=False, once=False):
     labels_cfg = fm.load_labels_config(None)
     name_to_id = build_name_to_id(labels_cfg)
 
-    pi = None
-    if not dry_run:
-        if pigpio is None:
-            raise SystemExit("[!] pigpio not installed. Run: pip install pigpio")
-        pi = pigpio.pi()
-        if not pi.connected:
-            raise SystemExit("[!] Could not connect to pigpiod. Run: sudo pigpiod")
+    pi = servo.connect() if not dry_run else None
 
     api = fm.login_pyicloud()
 
