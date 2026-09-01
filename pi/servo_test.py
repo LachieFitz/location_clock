@@ -17,15 +17,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import servo
 
 
-def move(pi, pin, angle):
+def move(gpio, pin, angle):
     pw = servo.angle_to_pulsewidth(angle)
-    pi.set_servo_pulsewidth(pin, pw)
+    servo.set_pulsewidth(gpio, pin, pw)
     print(f"[i] pin {pin} -> {angle}deg (pulsewidth {pw}us)")
 
 
-def sweep(pi, pin):
+def sweep(gpio, pin):
     for angle in list(range(0, 181, 10)) + list(range(180, -1, -10)):
-        move(pi, pin, angle)
+        move(gpio, pin, angle)
         time.sleep(0.15)
 
 
@@ -39,7 +39,7 @@ def resolve_pin(args):
     return None
 
 
-def interactive(pi):
+def interactive(gpio):
     print("Interactive servo test. Pin options:", servo.SERVO_PINS)
     print("Enter: '<pin> <angle>'  e.g. '12 90'   |  'off <pin>' to release  |  'q' to quit\n")
     while True:
@@ -53,11 +53,11 @@ def interactive(pi):
         try:
             if parts[0].lower() == "off" and len(parts) == 2:
                 pin = int(parts[1])
-                pi.set_servo_pulsewidth(pin, 0)
+                servo.set_pulsewidth(gpio, pin, 0)
                 print(f"[i] pin {pin} off")
                 continue
             pin, angle = int(parts[0]), float(parts[1])
-            move(pi, pin, angle)
+            move(gpio, pin, angle)
         except (ValueError, IndexError):
             print("[!] Couldn't parse that. Example: '12 90' or 'off 12'")
 
@@ -71,19 +71,19 @@ if __name__ == "__main__":
     ap.add_argument("--off", action="store_true", help="Stop sending pulses (let the servo relax) and exit")
     args = ap.parse_args()
 
-    pi = servo.connect()
+    gpio = servo.connect()
     try:
         pin = resolve_pin(args)
         if pin is None:
-            interactive(pi)
+            interactive(gpio)
         elif args.off:
-            pi.set_servo_pulsewidth(pin, 0)
+            servo.set_pulsewidth(gpio, pin, 0)
             print(f"[i] pin {pin} off")
         elif args.sweep:
-            sweep(pi, pin)
+            sweep(gpio, pin)
         elif args.angle is not None:
-            move(pi, pin, args.angle)
+            move(gpio, pin, args.angle)
         else:
             raise SystemExit("[!] Give --angle, --sweep, or --off along with --pin/--who.")
     finally:
-        pi.stop()
+        servo.disconnect(gpio)

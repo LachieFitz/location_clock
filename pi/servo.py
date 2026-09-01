@@ -1,12 +1,17 @@
-"""Shared servo config/helpers for clock_daemon.py and servo_test.py."""
+"""Shared servo config/helpers for clock_daemon.py and servo_test.py.
+
+Uses lgpio (talks directly to /dev/gpiochip0 via the kernel's GPIO character
+device interface) rather than pigpio - no background daemon needed.
+"""
 try:
-    import pigpio
+    import lgpio
 except ImportError:
-    pigpio = None
+    lgpio = None
 
 SERVO_PINS = {"dad": 12, "lachlan": 13, "mum": 18, "stella": 19}  # BCM pin numbers
 PULSE_MIN_US = 500   # pulsewidth at 0 degrees
 PULSE_MAX_US = 2500  # pulsewidth at 180 degrees
+GPIO_CHIP = 0  # /dev/gpiochip0 - header GPIOs on Pi 3/4. (Pi 5 moves these to chip 4.)
 
 
 def angle_to_pulsewidth(angle_deg):
@@ -15,9 +20,19 @@ def angle_to_pulsewidth(angle_deg):
 
 
 def connect():
-    if pigpio is None:
-        raise SystemExit("[!] pigpio not installed. Run: pip install pigpio")
-    pi = pigpio.pi()
-    if not pi.connected:
-        raise SystemExit("[!] Could not connect to pigpiod. Run: sudo pigpiod")
-    return pi
+    """Open the GPIO chip. Returns a handle to pass into set_pulsewidth/disconnect."""
+    if lgpio is None:
+        raise SystemExit("[!] lgpio not installed. Run: pip install lgpio  (or: sudo apt install python3-lgpio)")
+    try:
+        return lgpio.gpiochip_open(GPIO_CHIP)
+    except Exception as e:
+        raise SystemExit(f"[!] Could not open /dev/gpiochip{GPIO_CHIP}: {e}")
+
+
+def set_pulsewidth(handle, pin, pulsewidth_us):
+    """pulsewidth_us=0 stops sending pulses (servo relaxes)."""
+    lgpio.tx_servo(handle, pin, int(pulsewidth_us))
+
+
+def disconnect(handle):
+    lgpio.gpiochip_close(handle)

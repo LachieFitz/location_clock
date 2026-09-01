@@ -1,11 +1,11 @@
 """
 Runs on the Raspberry Pi. Polls iCloud for the 4 hardcoded family members'
 locations (reusing the login/geofence logic from ../main.py) and drives one
-micro servo per person on GPIO 12/13/18/19 via pigpio, pointing each servo
+micro servo per person on GPIO 12/13/18/19 via lgpio, pointing each servo
 at one of 4 discrete positions: home / secondary (work or school) / elsewhere
 / unknown (no fix yet).
 
-Requires the pigpio daemon running on the Pi: sudo pigpiod
+No daemon needed - lgpio talks to /dev/gpiochip0 directly.
 """
 import sys
 import time
@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import main as fm  # noqa: E402  (../main.py -- login, fetch, classify, geofences)
-import servo  # noqa: E402  (pin mapping + pigpio helpers, shared with servo_test.py)
+import servo  # noqa: E402  (pin mapping + lgpio helpers, shared with servo_test.py)
 
 # -------------------- config (tune once the clock face is in front of you) --------------------
 SERVO_PINS = servo.SERVO_PINS
@@ -43,7 +43,7 @@ def build_name_to_id(labels_cfg):
     return name_to_id
 
 
-def poll_once(api, labels_cfg, name_to_id, pi, dry_run):
+def poll_once(api, labels_cfg, name_to_id, gpio, dry_run):
     try:
         devices_by_id = dict(api.devices)
     except Exception as e:
@@ -67,21 +67,21 @@ def poll_once(api, labels_cfg, name_to_id, pi, dry_run):
         print(f"[i] {name:8s} label={label!r:12s} -> {bucket:9s} -> {angle}deg (pin {pin})")
 
         if not dry_run:
-            pi.set_servo_pulsewidth(pin, servo.angle_to_pulsewidth(angle))
+            servo.set_pulsewidth(gpio, pin, servo.angle_to_pulsewidth(angle))
 
 
 def run(dry_run=False, once=False):
     labels_cfg = fm.load_labels_config(None)
     name_to_id = build_name_to_id(labels_cfg)
 
-    pi = servo.connect() if not dry_run else None
+    gpio = servo.connect() if not dry_run else None
 
     api = fm.login_pyicloud()
 
     try:
         while True:
             cycle_start = time.time()
-            poll_once(api, labels_cfg, name_to_id, pi, dry_run)
+            poll_once(api, labels_cfg, name_to_id, gpio, dry_run)
             if once:
                 return
             elapsed = time.time() - cycle_start
@@ -89,15 +89,15 @@ def run(dry_run=False, once=False):
     except KeyboardInterrupt:
         print("\n[!] Stopping.")
     finally:
-        if pi is not None:
+        if gpio is not None:
             for pin in SERVO_PINS.values():
-                pi.set_servo_pulsewidth(pin, 0)  # stop sending signal, let servo relax
-            pi.stop()
+                servo.set_pulsewidth(gpio, pin, 0)  # stop sending pulses, let servo relax
+            servo.disconnect(gpio)
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Location-clock servo state machine.")
-    ap.add_argument("--dry-run", action="store_true", help="Skip pigpio/hardware; just print what each servo would do. Works off the Pi.")
+    ap.add_argument("--dry-run", action="store_true", help="Skip GPIO/hardware; just print what each servo would do. Works off the Pi.")
     ap.add_argument("--once", action="store_true", help="Run a single poll cycle then exit, instead of looping forever.")
     args = ap.parse_args()
     run(dry_run=args.dry_run, once=args.once)
