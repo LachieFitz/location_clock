@@ -31,7 +31,10 @@ def connect():
 
 def set_pulsewidth(handle, pin, pulsewidth_us):
     """pulsewidth_us=0 stops sending pulses (servo relaxes)."""
-    lgpio.tx_servo(handle, pin, int(pulsewidth_us))
+    result = lgpio.tx_servo(handle, pin, int(pulsewidth_us))
+    if result < 0:
+        print(f"[!] lgpio.tx_servo(pin={pin}, us={pulsewidth_us}) returned error code {result}")
+    return result
 
 
 def disconnect(handle):
