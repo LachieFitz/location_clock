@@ -1,0 +1,40 @@
+# systemd unit that runs the location clock as a real background service.
+#
+# EDIT the three paths/user below to match your Pi, then:
+#   sudo cp locationclock.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now locationclock
+#
+# Watch it:      journalctl -u locationclock -f
+# Stop/restart:  sudo systemctl stop|restart locationclock
+#
+# IMPORTANT: run clock_daemon.py by hand once FIRST. The very first iCloud login
+# needs you to type a 2FA code, and a service has no keyboard attached - it will
+# just fail. Once the session is cached and trusted, the service can log in
+# unattended.
+
+[Unit]
+Description=Location Clock (iCloud Find My -> servo hands)
+# Don't start before the network is actually usable, or the first poll fails.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fitzclock
+Group=fitzclock
+# Needs to be in the 'gpio' group to reach /dev/gpiochip0
+SupplementaryGroups=gpio
+WorkingDirectory=/home/fitzclock/pi
+ExecStart=/home/fitzclock/pi/venv/bin/python /home/fitzclock/pi/clock_daemon.py
+
+# Keep it alive: restart on crash, and after a delay so a failing iCloud login
+# doesn't spin in a tight loop.
+Restart=always
+RestartSec=30
+
+# Send print() straight to the journal without waiting for a full buffer.
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
