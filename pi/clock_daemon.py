@@ -70,7 +70,7 @@ def poll_once(api, labels_cfg, name_to_id, gpio, dry_run):
             servo.set_pulsewidth(gpio, pin, servo.angle_to_pulsewidth(angle))
 
 
-def run(dry_run=False, once=False):
+def run(dry_run=False, once=False, hold=5.0):
     labels_cfg = fm.load_labels_config(None)
     name_to_id = build_name_to_id(labels_cfg)
 
@@ -83,6 +83,11 @@ def run(dry_run=False, once=False):
             cycle_start = time.time()
             poll_once(api, labels_cfg, name_to_id, gpio, dry_run)
             if once:
+                # lgpio pulses die with this process, so give the servos time to
+                # actually reach the commanded position before we exit.
+                if gpio is not None:
+                    print(f"[i] holding {hold}s so the servos can travel...")
+                    time.sleep(hold)
                 return
             elapsed = time.time() - cycle_start
             time.sleep(max(0, POLL_INTERVAL_S - elapsed))
@@ -90,14 +95,13 @@ def run(dry_run=False, once=False):
         print("\n[!] Stopping.")
     finally:
         if gpio is not None:
-            for pin in SERVO_PINS.values():
-                servo.set_pulsewidth(gpio, pin, 0)  # stop sending pulses, let servo relax
-            servo.disconnect(gpio)
+            servo.disconnect(gpio)  # stops pulsing and frees the pins
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Location-clock servo state machine.")
     ap.add_argument("--dry-run", action="store_true", help="Skip GPIO/hardware; just print what each servo would do. Works off the Pi.")
     ap.add_argument("--once", action="store_true", help="Run a single poll cycle then exit, instead of looping forever.")
+    ap.add_argument("--hold", type=float, default=5.0, help="With --once, seconds to keep pulsing before exiting (default 5).")
     args = ap.parse_args()
-    run(dry_run=args.dry_run, once=args.once)
+    run(dry_run=args.dry_run, once=args.once, hold=args.hold)
