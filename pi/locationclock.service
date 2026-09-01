@@ -28,6 +28,8 @@ User=fitzclock
 Group=fitzclock
 # Needs to be in the 'gpio' group to reach /dev/gpiochip0
 SupplementaryGroups=gpio
+# Must be a WRITABLE directory: importing lgpio creates a .lgd-nfy<n> file in
+# the cwd, so a read-only working directory makes the import itself fail.
 WorkingDirectory=/home/fitzclock/pi
 ExecStart=/home/fitzclock/venv/bin/python /home/fitzclock/pi/clock_daemon.py
 

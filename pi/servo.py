@@ -3,6 +3,12 @@
 Uses lgpio (talks to /dev/gpiochip0 via the kernel GPIO character device) -
 no background daemon needed.
 
+IMPORTANT - lgpio must be imported with a WRITABLE working directory. On
+import it spawns a notify thread that creates a '.lgd-nfy<n>' file in the cwd,
+so running from a read-only directory (e.g. /) dies with:
+    FileNotFoundError: [Errno 2] ... '.lgd-nfy-3'
+This is why the systemd unit sets WorkingDirectory to the project folder.
+
 IMPORTANT - two lgpio behaviours that differ from pigpio:
   1. A pin must be claimed as an output (gpio_claim_output) before tx_servo
      will drive it. pigpio did not require this.
