@@ -18,7 +18,7 @@ try:
 except ImportError:
     lgpio = None
 
-SERVO_PINS = {"dad": 12, "lachlan": 13, "mum": 18, "stella": 18}  # BCM pin numbers
+SERVO_PINS = {"dad": 19, "lachlan": 13, "mum": 18, "stella": 12}  # BCM pin numbers
 PULSE_MIN_US = 500   # pulsewidth at 0 degrees
 PULSE_MAX_US = 2500  # pulsewidth at 180 degrees
 SERVO_FREQ_HZ = 50
