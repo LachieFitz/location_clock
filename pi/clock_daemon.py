@@ -60,8 +60,29 @@ def check_config():
         raise SystemExit(f"[!] STARTUP_STATE {STARTUP_STATE!r} has no angle in STATE_ANGLES.")
 
 
-def bucket_for(label):
-    """Map a geofence label onto one of the fixed clock positions."""
+def fence_for(labels_cfg, dev_id, label):
+    """Find the geofence dict a label came from (device-specific first)."""
+    by_dev = labels_cfg.get("by_device", {}).get(dev_id, {}).get("labels", {})
+    if label in by_dev:
+        return by_dev[label]
+    return labels_cfg.get("default", {}).get("labels", {}).get(label, {})
+
+
+def bucket_for(label, fence=None):
+    """Map a geofence label onto one of the fixed clock positions.
+
+    A fence may name its position explicitly with a "state" key, which is how
+    you get several different places to drive the same hand position:
+
+        "nanna": {"lat": .., "lon": .., "radius_m": 200, "state": "home"}
+
+    Without a "state", the label name decides: "home" -> home,
+    "elsewhere" -> elsewhere, anything else -> secondary. So extra work/school
+    style places need no "state" at all.
+    """
+    declared = (fence or {}).get("state")
+    if declared:
+        return declared
     if label == "home":
         return "home"
     if label == fm.ELSEWHERE_LABEL:
@@ -84,6 +105,23 @@ def is_travelling(history):
     displacement = fm.haversine_m(lat_old, lon_old, lat_new, lon_new)
     speed = displacement / elapsed
     return (displacement >= TRAVEL_MIN_MOVE_M and speed >= TRAVEL_SPEED_MPS), speed
+
+
+def validate_states(labels_cfg):
+    """Catch a typo'd "state" in geofences.json now, not on the poll where
+    that person finally walks into that fence."""
+    bad = []
+    sections = [("default", labels_cfg.get("default", {}).get("labels", {}))]
+    for dev_id, cfg in labels_cfg.get("by_device", {}).items():
+        sections.append((cfg.get("name", dev_id[:8]), cfg.get("labels", {})))
+    for who, labels in sections:
+        for label, fence in labels.items():
+            state = fence.get("state")
+            if state and state not in STATE_ANGLES:
+                bad.append(f"{who}/{label}: state={state!r}")
+    if bad:
+        raise SystemExit("[!] geofences.json uses states with no angle defined: "
+                         + "; ".join(bad) + f". Valid: {sorted(STATE_ANGLES)}")
 
 
 def build_name_to_id(labels_cfg):
@@ -160,7 +198,7 @@ def poll_once(api, labels_cfg, name_to_id, gpio, dry_run, last_bucket, history):
         else:
             result = fm.classify(dev_id, lat, lon, labels_cfg)
             label = result[0] if result else fm.ELSEWHERE_LABEL
-            bucket = bucket_for(label)
+            bucket = bucket_for(label, fence_for(labels_cfg, dev_id, label))
             detail = label
 
         angle = STATE_ANGLES[bucket]
@@ -178,6 +216,7 @@ def poll_once(api, labels_cfg, name_to_id, gpio, dry_run, last_bucket, history):
 def run(dry_run=False, once=False, run_selftest=False):
     check_config()
     labels_cfg = fm.load_labels_config(None)
+    validate_states(labels_cfg)
     name_to_id = build_name_to_id(labels_cfg)
 
     gpio = servo.connect() if not dry_run else None

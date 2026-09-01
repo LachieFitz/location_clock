@@ -18,6 +18,9 @@ Description=Location Clock (iCloud Find My -> servo hands)
 # Don't start before the network is actually usable, or the first poll fails.
 After=network-online.target
 Wants=network-online.target
+# Never stop retrying. Without this systemd gives up after 5 restarts in 10s,
+# which is exactly what happens if the Pi boots before the router does.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -26,7 +29,7 @@ Group=fitzclock
 # Needs to be in the 'gpio' group to reach /dev/gpiochip0
 SupplementaryGroups=gpio
 WorkingDirectory=/home/fitzclock/pi
-ExecStart=/home/fitzclock/pi/venv/bin/python /home/fitzclock/pi/clock_daemon.py
+ExecStart=/home/fitzclock/venv/bin/python /home/fitzclock/pi/clock_daemon.py
 
 # Keep it alive: restart on crash, and after a delay so a failing iCloud login
 # doesn't spin in a tight loop.
